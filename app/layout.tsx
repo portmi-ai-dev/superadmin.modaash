@@ -1,34 +1,26 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+// app/layout.tsx
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata } from 'next';
+import LayoutWrapper from './components/layout/LayoutWrapper';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "SuperAdmin",
-  description: "admin portal for modaash authorized personels",
+    title: 'Super Admin - MODAASH',
+    description: 'Super Admin Dashboard for Manpower Management System',
 };
 
 export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
-  );
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <html lang="en">
+            <body>
+                <LayoutWrapper>
+                    {children}
+                </LayoutWrapper>
+            </body>
+        </html>
+    );
 }

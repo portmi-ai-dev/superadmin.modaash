@@ -27,8 +27,8 @@ export default function Home() {
 
           <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
             <div className="space-y-2">
-              <label 
-                htmlFor="email" 
+              <label
+                htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
               >
                 Email Address
@@ -44,8 +44,8 @@ export default function Home() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label 
-                  htmlFor="password" 
+                <label
+                  htmlFor="password"
                   className="block text-sm font-medium text-gray-700"
                 >
                   Password
