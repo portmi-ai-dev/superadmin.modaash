@@ -2,39 +2,42 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { superAdminClient } from '../../../lib/api';
-import { User, Company } from '../../../types';
-import Card from '../../../components/ui/Card';
-import Button from '../../../components/ui/Button';
-import Badge from '../../../components/ui/Badge';
-import Spinner from '../../../components/ui/Spinner';
-import { 
-  FiArrowLeft, 
-  FiUser, 
-  FiMail, 
-  FiPhone, 
-  FiMapPin, 
+import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  FiArrowLeft,
+  FiBriefcase,
   FiCalendar,
   FiLock,
-  FiUnlock,
-  FiRefreshCw,
-  FiBriefcase,
-  FiShield
+  FiMail,
+  FiMapPin,
+  FiPhone,
+  FiShield,
+  FiUnlock
 } from 'react-icons/fi';
+import Badge from '../../../components/ui/Badge';
+import Button from '../../../components/ui/Button';
+import Card from '../../../components/ui/Card';
+import Spinner from '../../../components/ui/Spinner';
+import { superAdminClient } from '../../../lib/api';
 import { formatDate } from '../../../lib/utils';
-import toast from 'react-hot-toast';
+import { Company, User } from '../../../types';
 
 interface UserDetails extends User {
   company?: Company;
+}
+
+interface UserDetailsResponse {
+  success: boolean;
+  data: UserDetails;
 }
 
 export default function UserDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as string;
-  
+
   const [user, setUser] = useState<UserDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,10 +49,11 @@ export default function UserDetailsPage() {
     setLoading(true);
     try {
       const response = await superAdminClient.get(`/users/${userId}`);
-      setUser(response.data);
-    } catch (error) {
+      const responseData = response.data as UserDetailsResponse;
+      setUser(responseData.data);
+    } catch (error: any) {
       console.error('Failed to fetch user details:', error);
-      toast.error('Failed to load user details');
+      toast.error(error?.response?.data?.message || 'Failed to load user details');
     } finally {
       setLoading(false);
     }
@@ -57,10 +61,10 @@ export default function UserDetailsPage() {
 
   const handleToggleBlock = async () => {
     if (!user) return;
-    
+
     const action = user.isBlocked ? 'unblock' : 'block';
     const confirmed = confirm(`Are you sure you want to ${action} ${user.fullName}?`);
-    
+
     if (!confirmed) return;
 
     try {
@@ -69,8 +73,8 @@ export default function UserDetailsPage() {
         toast.success(`User ${action}ed successfully`);
         fetchUserDetails();
       }
-    } catch (error) {
-      toast.error(`Failed to ${action} user`);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || `Failed to ${action} user`);
     }
   };
 
@@ -145,7 +149,7 @@ export default function UserDetailsPage() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900">{user.fullName}</h2>
           <p className="text-gray-500 text-sm mt-1">{user.role}</p>
-          
+
           <div className="mt-6 pt-6 border-t border-gray-100">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">User ID</span>
@@ -168,7 +172,7 @@ export default function UserDetailsPage() {
                 <p className="text-gray-900">{user.email || 'N/A'}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
               <FiPhone className="text-gray-400 text-xl" />
               <div>
@@ -176,7 +180,7 @@ export default function UserDetailsPage() {
                 <p className="text-gray-900">{user.contactNumber || 'N/A'}</p>
               </div>
             </div>
-            
+
             {user.address && (
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <FiMapPin className="text-gray-400 text-xl" />
@@ -194,9 +198,9 @@ export default function UserDetailsPage() {
           {user.company ? (
             <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
               {user.company.logo ? (
-                <img 
-                  src={user.company.logo} 
-                  alt={user.company.name} 
+                <img
+                  src={user.company.logo}
+                  alt={user.company.name}
                   className="w-12 h-12 rounded-lg object-cover"
                 />
               ) : (
@@ -232,7 +236,7 @@ export default function UserDetailsPage() {
           )}
         </Card>
 
-        {/* Activity Log (Optional - can be added later) */}
+        {/* Activity Log (Optional) */}
         <Card title="Recent Activity" className="lg:col-span-3">
           <div className="text-center py-8 text-gray-500">
             <FiCalendar className="text-2xl mx-auto mb-2" />

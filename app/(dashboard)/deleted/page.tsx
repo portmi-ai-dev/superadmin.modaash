@@ -40,17 +40,23 @@ interface DeletedItem {
         _id: string;
         name: string;
     };
-    originalData: any;
+    originalData?: any;
 }
 
+// The API returns grouped data by entity type
 interface DeletedItemsResponse {
     success: boolean;
-    data: DeletedItem[];
-    pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        pages: number;
+    data: {
+        employers: DeletedItem[];
+        jobDemands: DeletedItem[];
+        workers: DeletedItem[];
+        subAgents: DeletedItem[];
+    };
+    counts: {
+        employers: number;
+        jobDemands: number;
+        workers: number;
+        subAgents: number;
     };
 }
 
@@ -66,6 +72,7 @@ export default function DeletedItemsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [stats, setStats] = useState<Record<string, number>>({});
 
     useEffect(() => {
         fetchDeletedItems();
@@ -83,9 +90,60 @@ export default function DeletedItemsPage() {
             const response = await superAdminClient.get(`/deleted-items?${params}`);
             const responseData = response.data as DeletedItemsResponse;
 
-            setItems(responseData.data);
-            setTotalPages(responseData.pagination.pages);
-            setTotalItems(responseData.pagination.total);
+            // Flatten the grouped data into a single array for display
+            let allItems: DeletedItem[] = [];
+
+            if (entityType === 'all' || entityType === 'employer') {
+                const employersWithType = (responseData.data?.employers || []).map(item => ({
+                    ...item,
+                    entityType: 'employer'
+                }));
+                allItems = [...allItems, ...employersWithType];
+            }
+
+            if (entityType === 'all' || entityType === 'job-demand') {
+                const jobDemandsWithType = (responseData.data?.jobDemands || []).map(item => ({
+                    ...item,
+                    entityType: 'job-demand'
+                }));
+                allItems = [...allItems, ...jobDemandsWithType];
+            }
+
+            if (entityType === 'all' || entityType === 'worker') {
+                const workersWithType = (responseData.data?.workers || []).map(item => ({
+                    ...item,
+                    entityType: 'worker'
+                }));
+                allItems = [...allItems, ...workersWithType];
+            }
+
+            if (entityType === 'all' || entityType === 'sub-agent') {
+                const subAgentsWithType = (responseData.data?.subAgents || []).map(item => ({
+                    ...item,
+                    entityType: 'sub-agent'
+                }));
+                allItems = [...allItems, ...subAgentsWithType];
+            }
+
+            // Filter by search term if provided
+            if (search) {
+                allItems = allItems.filter(item =>
+                    item.name?.toLowerCase().includes(search.toLowerCase())
+                );
+            }
+
+            setItems(allItems);
+            setTotalItems(allItems.length);
+
+            // Calculate stats from counts
+            setStats({
+                employer: responseData.counts?.employers || 0,
+                'job-demand': responseData.counts?.jobDemands || 0,
+                worker: responseData.counts?.workers || 0,
+                'sub-agent': responseData.counts?.subAgents || 0
+            });
+
+            setTotalPages(Math.ceil(allItems.length / 20));
         } catch (error: any) {
             console.error('Failed to fetch deleted items:', error);
             toast.error(error?.response?.data?.message || 'Failed to load deleted items');
@@ -134,7 +192,24 @@ export default function DeletedItemsPage() {
 
     const handleViewOriginal = (item: DeletedItem) => {
         // Redirect to original entity details page
-        router.push(`/${item.entityType === 'job-demand' ? 'job-demands' : item.entityType}s/${item._id}`);
+        let path = '';
+        switch (item.entityType) {
+            case 'employer':
+                path = `/employers/${item._id}`;
+                break;
+            case 'job-demand':
+                path = `/job-demands/${item._id}`;
+                break;
+            case 'worker':
+                path = `/workers/${item._id}`;
+                break;
+            case 'sub-agent':
+                path = `/sub-agents/${item._id}`;
+                break;
+            default:
+                path = `/`;
+        }
+        router.push(path);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -186,12 +261,6 @@ export default function DeletedItemsPage() {
                 return 'border-gray-500 bg-gray-50';
         }
     };
-
-    // Calculate stats
-    const stats = items.reduce((acc, item) => {
-        acc[item.entityType] = (acc[item.entityType] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
 
     return (
         <div className="space-y-6">
