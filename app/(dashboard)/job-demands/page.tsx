@@ -6,25 +6,24 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+    FiActivity,
+    FiBriefcase,
+    FiCalendar,
+    FiCheckCircle,
+    FiChevronLeft,
+    FiChevronRight,
+    FiClock,
+    FiDollarSign,
+    FiDownload,
     FiFileText,
-    FiGrid,
-    FiList,
     FiRefreshCw,
     FiSearch,
-    FiUsers,
-    FiX
+    FiShield,
+    FiTrendingUp,
+    FiUsers
 } from 'react-icons/fi';
-import JobDemandCard from '../../components/job-demands/JobDemandCard';
-import JobDemandTable from '../../components/job-demands/JobDemandTable';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
-import Spinner from '../../components/ui/Spinner';
 import { superAdminClient } from '../../lib/api';
 import { JobDemand } from '../../types';
-
-type ViewMode = 'grid' | 'table';
 
 interface JobDemandsResponse {
     success: boolean;
@@ -40,11 +39,17 @@ interface JobDemandsResponse {
     };
 }
 
+interface StatusConfig {
+    bg: string;
+    text: string;
+    dot: string;
+}
+
 export default function JobDemandsPage() {
     const router = useRouter();
     const [demands, setDemands] = useState<JobDemand[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<ViewMode>('grid');
+    const [exporting, setExporting] = useState(false);
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('all');
     const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -69,6 +74,8 @@ export default function JobDemandsPage() {
             const response = await superAdminClient.get(`/job-demands?${params}`);
             const responseData = response.data as JobDemandsResponse;
 
+            console.log('Job demands data:', responseData.data);
+
             setDemands(responseData.data);
             setTotalPages(responseData.pagination.pages);
             setTotalDemands(responseData.pagination.total);
@@ -80,14 +87,63 @@ export default function JobDemandsPage() {
         }
     };
 
-    const handleViewDemand = (demand: JobDemand) => {
-        router.push(`/job-demands/${demand._id}`);
+    const handleExport = async () => {
+        const reason = prompt(
+            '📋 Export Reason Required\n\n' +
+            'Please provide a reason for exporting job demand data:\n' +
+            'Examples:\n' +
+            '- Demand analysis report\n' +
+            '- Recruitment planning\n' +
+            '- Market trend analysis\n' +
+            '- Monthly reporting'
+        );
+
+        if (!reason) return;
+        if (reason.trim().length < 10) {
+            toast.error('Please provide a more detailed reason (minimum 10 characters)');
+            return;
+        }
+
+        setExporting(true);
+        try {
+            const response = await superAdminClient.get(`/job-demands?limit=10000`);
+            const demandsData = response.data.data as JobDemand[];
+
+            const csvRows = [
+                ['ID', 'Job Title', 'Employer', 'Required', 'Assigned', 'Remaining', 'Status', 'Deadline', 'Salary', 'Company', 'Created'],
+                ...demandsData.map((d: JobDemand) => [
+                    d._id.slice(-8),
+                    d.jobTitle,
+                    d.employer?.employerName || '—',
+                    d.requiredWorkers,
+                    d.assignedCount || 0,
+                    d.remainingPositions || 0,
+                    d.status,
+                    new Date(d.deadline).toLocaleDateString(),
+                    d.salary || '—',
+                    d.company?.name || '—',
+                    new Date(d.createdAt).toLocaleDateString()
+                ])
+            ];
+
+            const csvContent = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `job_demands_${new Date().toISOString().slice(0, 19)}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            toast.success(`Exported ${demandsData.length} job demands (access logged)`);
+        } catch (error: any) {
+            toast.error('Export failed');
+        } finally {
+            setExporting(false);
+        }
     };
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        setPage(1);
-        fetchJobDemands();
+    const handleViewDemand = (demand: JobDemand) => {
+        router.push(`/job-demands/${demand._id}`);
     };
 
     const clearFilters = () => {
@@ -104,6 +160,19 @@ export default function JobDemandsPage() {
         { value: 'closed', label: 'Closed' },
     ];
 
+    const getStatusConfig = (status: string): StatusConfig => {
+        switch (status) {
+            case 'open':
+                return { bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' };
+            case 'in-progress':
+                return { bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' };
+            case 'closed':
+                return { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' };
+            default:
+                return { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' };
+        }
+    };
+
     // Calculate stats
     const openCount = demands.filter(d => d.status === 'open' && !d.deleted).length;
     const inProgressCount = demands.filter(d => d.status === 'in-progress' && !d.deleted).length;
@@ -111,217 +180,327 @@ export default function JobDemandsPage() {
     const deletedCount = demands.filter(d => d.deleted).length;
     const totalPositions = demands.reduce((sum, d) => sum + d.requiredWorkers, 0);
     const totalAssigned = demands.reduce((sum, d) => sum + d.assignedCount, 0);
+    const fillRate = totalPositions > 0 ? Math.round((totalAssigned / totalPositions) * 100) : 0;
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Job Demands</h1>
-                    <p className="text-gray-600 mt-1">
-                        Manage all job demands across all companies
-                    </p>
-                </div>
-                <Button
-                    variant="outline"
-                    onClick={fetchJobDemands}
-                    isLoading={loading}
-                >
-                    <FiRefreshCw className="mr-2" />
-                    Refresh
-                </Button>
-            </div>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
+            <div className="max-w-[1600px] mx-auto px-8 py-10">
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card className="text-center">
-                    <FiFileText className="text-2xl text-blue-500 mx-auto mb-2" />
-                    <p className="text-2xl font-bold">{totalDemands}</p>
-                    <p className="text-sm text-gray-600">Total Demands</p>
-                </Card>
-                <Card className="text-center">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-green-600 font-bold text-lg">{openCount}</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Open</p>
-                </Card>
-                <Card className="text-center">
-                    <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-yellow-600 font-bold text-lg">{inProgressCount}</span>
-                    </div>
-                    <p className="text-sm text-gray-600">In Progress</p>
-                </Card>
-                <Card className="text-center">
-                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <span className="text-gray-600 font-bold text-lg">{closedCount}</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Closed</p>
-                </Card>
-                <Card className="text-center">
-                    <FiUsers className="text-2xl text-purple-500 mx-auto mb-2" />
-                    <p className="text-lg font-bold">{totalAssigned} / {totalPositions}</p>
-                    <p className="text-xs text-gray-500">Workers Assigned</p>
-                </Card>
-            </div>
-
-            {/* Filters */}
-            <Card>
-                <div className="space-y-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        {/* Search */}
-                        <form onSubmit={handleSearch} className="flex-1">
-                            <div className="relative">
-                                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <Input
-                                    type="text"
-                                    placeholder="Search by job title, employer, or company..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-10 pr-10"
-                                />
-                                {search && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearch('')}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                    >
-                                        <FiX />
-                                    </button>
-                                )}
+                {/* Header Section */}
+                <div className="mb-12">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-1 h-8 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-full"></div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono text-indigo-500 tracking-wider">RECRUITMENT DEMANDS</span>
+                                </div>
                             </div>
-                        </form>
-
-                        {/* Status Filter */}
-                        <div className="w-full md:w-40">
-                            <Select
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value)}
-                                options={statusOptions}
-                            />
+                            <h1 className="text-4xl font-light tracking-tight text-gray-900">
+                                Job Demands
+                            </h1>
+                            <p className="text-gray-400 mt-2 text-sm font-light">
+                                Manage and monitor all job demands across your organization
+                            </p>
                         </div>
+                        <button
+                            onClick={handleExport}
+                            disabled={exporting}
+                            className="group flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition-all duration-300"
+                        >
+                            {exporting ? (
+                                <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+                            ) : (
+                                <FiDownload className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+                            )}
+                            <span>{exporting ? 'Exporting...' : 'Export Data'}</span>
+                        </button>
+                    </div>
+                </div>
 
-                        {/* Deleted Toggle */}
-                        <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-5 gap-5 mb-10">
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <FiFileText className="w-5 h-5 text-indigo-500" />
+                            <span className="text-xs text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">{fillRate}% filled</span>
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{totalDemands.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Total Demands</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiTrendingUp className="w-5 h-5 text-emerald-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{openCount}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Open</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiClock className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{inProgressCount}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">In Progress</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiCheckCircle className="w-5 h-5 text-gray-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{closedCount}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Closed</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiUsers className="w-5 h-5 text-purple-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{totalAssigned} / {totalPositions}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Workers Assigned</p>
+                    </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-10">
+                    <div className="relative max-w-md">
+                        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                        <input
+                            type="text"
+                            placeholder="Search by job title, employer, or company..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && fetchJobDemands()}
+                            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
+                        />
+                    </div>
+                    <div className="flex items-center gap-4 mt-4">
+                        <select
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            className="px-4 py-2 text-sm bg-white border border-gray-200 rounded-full focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                        >
+                            {statusOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                        <label className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-full cursor-pointer hover:bg-gray-50 transition-colors">
                             <input
                                 type="checkbox"
                                 checked={includeDeleted}
                                 onChange={(e) => setIncludeDeleted(e.target.checked)}
-                                className="w-4 h-4 text-blue-600 rounded"
+                                className="w-4 h-4 rounded border-gray-300 text-indigo-500 focus:ring-indigo-200"
                             />
-                            <span className="text-sm text-gray-700">Include Deleted</span>
+                            <span>Include deleted</span>
                         </label>
+                        {(search || status !== 'all' || includeDeleted) && (
+                            <button
+                                onClick={clearFilters}
+                                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+                        <button
+                            onClick={fetchJobDemands}
+                            className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                            disabled={loading}
+                        >
+                            <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                        <div className="flex-1 text-right text-xs text-gray-300">
+                            {demands.length} of {totalDemands} results
+                        </div>
+                    </div>
+                </div>
 
-                        {/* View Toggle */}
-                        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
-                            <button
-                                onClick={() => setViewMode('grid')}
-                                className={`p-2 rounded transition-colors ${viewMode === 'grid'
-                                        ? 'bg-white text-blue-600 shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                <FiGrid />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('table')}
-                                className={`p-2 rounded transition-colors ${viewMode === 'table'
-                                        ? 'bg-white text-blue-600 shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                <FiList />
-                            </button>
+                {/* Security Cards */}
+                <div className="grid grid-cols-2 gap-4 mb-10">
+                    <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                                <FiShield className="w-4 h-4 text-indigo-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-gray-700 uppercase tracking-wide">Demand Integrity</p>
+                                <p className="text-xs text-gray-400 mt-1">All job demands are tracked with status and progress.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                                <FiActivity className="w-4 h-4 text-indigo-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-gray-700 uppercase tracking-wide">Fulfillment Tracking</p>
+                                <p className="text-xs text-gray-400 mt-1">Worker assignment and position fill rates monitored.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Job Demands Grid */}
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <div className="w-8 h-8 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin" />
+                    </div>
+                ) : demands.length === 0 ? (
+                    <div className="text-center py-20">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                            <FiFileText className="w-6 h-6 text-gray-300" />
+                        </div>
+                        <p className="text-sm text-gray-400">No job demands found</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-3 gap-6">
+                            {demands.map((demand) => {
+                                const statusConfig = getStatusConfig(demand.status);
+                                const isExpired = new Date(demand.deadline) < new Date();
+                                const fillPercentage = (demand.assignedCount / demand.requiredWorkers) * 100;
+
+                                return (
+                                    <div
+                                        key={demand._id}
+                                        onClick={() => handleViewDemand(demand)}
+                                        className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
+                                    >
+                                        <div className="p-5">
+                                            {/* Header */}
+                                            <div className="flex items-start justify-between mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                                        <FiBriefcase className="w-4 h-4 text-gray-500" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-medium text-gray-900 text-sm group-hover:text-indigo-600 transition-colors">
+                                                            {demand.jobTitle}
+                                                        </h3>
+                                                        <p className="text-xs text-gray-400 font-mono mt-0.5">#{demand._id.slice(-6)}</p>
+                                                    </div>
+                                                </div>
+                                                <div className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
+                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusConfig.dot} mr-1.5`} />
+                                                    {demand.status}
+                                                </div>
+                                            </div>
+
+                                            {/* Employer & Company */}
+                                            <div className="space-y-2 mb-3 pb-3 border-b border-gray-50">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs text-gray-400">Employer</span>
+                                                    <span className="text-xs text-gray-700 truncate max-w-[180px]">{demand.employer?.employerName || '—'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs text-gray-400">Company</span>
+                                                    <span className="text-xs text-gray-600 truncate max-w-[180px]">{demand.company?.name || '—'}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Positions & Fill Rate */}
+                                            <div className="mb-3 pb-3 border-b border-gray-50">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <FiUsers className="w-3 h-3 text-purple-500" />
+                                                        <span className="text-xs text-gray-500">Positions</span>
+                                                    </div>
+                                                    <span className="text-xs font-medium text-gray-700">
+                                                        {demand.assignedCount} / {demand.requiredWorkers}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                                                    <div
+                                                        className={`h-1.5 rounded-full transition-all ${fillPercentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                                        style={{ width: `${Math.min(fillPercentage, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-xs text-gray-400 mt-1 text-right">
+                                                    {fillPercentage >= 100 ? '✓ Fully filled' : `${Math.round(fillPercentage)}% filled`}
+                                                </p>
+                                            </div>
+
+                                            {/* Salary & Deadline */}
+                                            <div className="space-y-2">
+                                                {demand.salary && (
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1">
+                                                            <FiDollarSign className="w-3 h-3 text-emerald-500" />
+                                                            <span className="text-xs text-gray-500">Salary</span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-600 truncate max-w-[180px]">{demand.salary}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1">
+                                                        <FiCalendar className="w-3 h-3 text-amber-500" />
+                                                        <span className="text-xs text-gray-500">Deadline</span>
+                                                    </div>
+                                                    <span className={`text-xs ${isExpired && demand.status !== 'closed' ? 'text-rose-500 font-medium' : 'text-gray-600'}`}>
+                                                        {new Date(demand.deadline).toLocaleDateString()}
+                                                        {isExpired && demand.status !== 'closed' && ' (Expired)'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Remaining Positions Alert */}
+                                            {demand.remainingPositions > 0 && demand.status !== 'closed' && !isExpired && (
+                                                <div className="mt-3 pt-2 border-t border-gray-100">
+                                                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                                                        <FiClock className="w-3 h-3" />
+                                                        {demand.remainingPositions} position(s) remaining
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        {/* Clear Filters */}
-                        {(search || status !== 'all' || includeDeleted) && (
-                            <Button variant="outline" onClick={clearFilters}>
-                                <FiX className="mr-2" />
-                                Clear Filters
-                            </Button>
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="flex justify-center items-center gap-1 mt-12">
+                                <button
+                                    onClick={() => setPage(page - 1)}
+                                    disabled={page === 1}
+                                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-30 transition-all"
+                                >
+                                    <FiChevronLeft className="w-4 h-4" />
+                                </button>
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum: number;
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (page <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (page >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = page - 2 + i;
+                                    }
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`w-8 h-8 text-sm rounded-full transition-all ${page === pageNum
+                                                ? 'bg-indigo-500 text-white shadow-md'
+                                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => setPage(page + 1)}
+                                    disabled={page === totalPages}
+                                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-30 transition-all"
+                                >
+                                    <FiChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
                         )}
-                    </div>
-
-                    {/* Results count */}
-                    <div className="text-sm text-gray-500">
-                        Showing {demands.length} of {totalDemands} job demands
-                        {includeDeleted && <span className="ml-2 text-yellow-600">(including deleted)</span>}
-                    </div>
-                </div>
-            </Card>
-
-            {/* Loading State */}
-            {loading && (
-                <div className="flex justify-center py-12">
-                    <Spinner size="lg" />
-                </div>
-            )}
-
-            {/* Empty State */}
-            {!loading && demands.length === 0 && (
-                <Card className="text-center py-12">
-                    <div className="flex flex-col items-center">
-                        <FiFileText className="text-4xl text-gray-400 mb-3" />
-                        <h3 className="text-lg font-medium text-gray-900">No job demands found</h3>
-                        <p className="text-gray-500 mt-1">
-                            {search || status !== 'all' || includeDeleted
-                                ? 'Try adjusting your filters'
-                                : 'No job demands created yet'}
-                        </p>
-                        {(search || status !== 'all' || includeDeleted) && (
-                            <Button variant="outline" onClick={clearFilters} className="mt-4">
-                                Clear Filters
-                            </Button>
-                        )}
-                    </div>
-                </Card>
-            )}
-
-            {/* Grid View */}
-            {!loading && demands.length > 0 && viewMode === 'grid' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {demands.map((demand) => (
-                        <JobDemandCard
-                            key={demand._id}
-                            demand={demand}
-                            onClick={() => handleViewDemand(demand)}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Table View */}
-            {!loading && demands.length > 0 && viewMode === 'table' && (
-                <Card className="overflow-hidden">
-                    <JobDemandTable
-                        demands={demands}
-                        onView={handleViewDemand}
-                    />
-                </Card>
-            )}
-
-            {/* Pagination */}
-            {!loading && demands.length > 0 && totalPages > 1 && (
-                <div className="flex justify-center gap-2">
-                    <Button
-                        variant="outline"
-                        disabled={page === 1}
-                        onClick={() => setPage(page - 1)}
-                    >
-                        Previous
-                    </Button>
-                    <span className="flex items-center px-4 text-sm text-gray-600">
-                        Page {page} of {totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        disabled={page === totalPages}
-                        onClick={() => setPage(page + 1)}
-                    >
-                        Next
-                    </Button>
-                </div>
-            )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

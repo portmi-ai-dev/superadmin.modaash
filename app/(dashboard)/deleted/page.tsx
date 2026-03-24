@@ -7,7 +7,10 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
     FiAlertTriangle,
+    FiArchive,
     FiBriefcase,
+    FiChevronLeft,
+    FiChevronRight,
     FiDatabase,
     FiFileText,
     FiRefreshCw,
@@ -16,14 +19,9 @@ import {
     FiTrash2,
     FiUser,
     FiUserCheck,
-    FiX
+    FiUserX
 } from 'react-icons/fi';
 import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
-import Spinner from '../../components/ui/Spinner';
 import { superAdminClient } from '../../lib/api';
 import { formatDate } from '../../lib/utils';
 
@@ -43,7 +41,6 @@ interface DeletedItem {
     originalData?: any;
 }
 
-// The API returns grouped data by entity type
 interface DeletedItemsResponse {
     success: boolean;
     data: {
@@ -83,14 +80,13 @@ export default function DeletedItemsPage() {
         try {
             const params = new URLSearchParams();
             params.append('page', page.toString());
-            params.append('limit', '20');
+            params.append('limit', '12');
             if (entityType !== 'all') params.append('entityType', entityType);
             if (search) params.append('search', search);
 
             const response = await superAdminClient.get(`/deleted-items?${params}`);
             const responseData = response.data as DeletedItemsResponse;
 
-            // Flatten the grouped data into a single array for display
             let allItems: DeletedItem[] = [];
 
             if (entityType === 'all' || entityType === 'employer') {
@@ -125,7 +121,6 @@ export default function DeletedItemsPage() {
                 allItems = [...allItems, ...subAgentsWithType];
             }
 
-            // Filter by search term if provided
             if (search) {
                 allItems = allItems.filter(item =>
                     item.name?.toLowerCase().includes(search.toLowerCase())
@@ -134,16 +129,13 @@ export default function DeletedItemsPage() {
 
             setItems(allItems);
             setTotalItems(allItems.length);
-
-            // Calculate stats from counts
             setStats({
                 employer: responseData.counts?.employers || 0,
                 'job-demand': responseData.counts?.jobDemands || 0,
                 worker: responseData.counts?.workers || 0,
                 'sub-agent': responseData.counts?.subAgents || 0
             });
-
-            setTotalPages(Math.ceil(allItems.length / 20));
+            setTotalPages(Math.ceil(allItems.length / 12));
         } catch (error: any) {
             console.error('Failed to fetch deleted items:', error);
             toast.error(error?.response?.data?.message || 'Failed to load deleted items');
@@ -191,7 +183,6 @@ export default function DeletedItemsPage() {
     };
 
     const handleViewOriginal = (item: DeletedItem) => {
-        // Redirect to original entity details page
         let path = '';
         switch (item.entityType) {
             case 'employer':
@@ -250,285 +241,347 @@ export default function DeletedItemsPage() {
     const getEntityColor = (type: string) => {
         switch (type) {
             case 'employer':
-                return 'border-orange-500 bg-orange-50';
+                return 'border-orange-500/30 bg-orange-50/50';
             case 'job-demand':
-                return 'border-red-500 bg-red-50';
+                return 'border-red-500/30 bg-red-50/50';
             case 'worker':
-                return 'border-pink-500 bg-pink-50';
+                return 'border-pink-500/30 bg-pink-50/50';
             case 'sub-agent':
-                return 'border-indigo-500 bg-indigo-50';
+                return 'border-indigo-500/30 bg-indigo-50/50';
             default:
-                return 'border-gray-500 bg-gray-50';
+                return 'border-gray-500/30 bg-gray-50/50';
         }
     };
 
+    const totalDeleted = Object.values(stats).reduce((a, b) => a + b, 0);
+
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Deleted Items</h1>
-                    <p className="text-gray-600 mt-1">
-                        Manage all soft-deleted items across the system
-                    </p>
-                </div>
-                <Button
-                    variant="outline"
-                    onClick={fetchDeletedItems}
-                    isLoading={loading}
-                >
-                    <FiRefreshCw className="mr-2" />
-                    Refresh
-                </Button>
-            </div>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
+            <div className="max-w-[1600px] mx-auto px-8 py-10">
 
-            {/* Warning Banner */}
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                    <FiAlertTriangle className="text-red-600 text-lg mt-0.5" />
-                    <div>
-                        <p className="text-sm font-medium text-red-800">⚠️ Deleted Items Management</p>
-                        <p className="text-xs text-red-700 mt-1">
-                            These items have been soft-deleted. You can restore them or permanently delete them.
-                            <strong> Permanent deletion cannot be undone.</strong>
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card className="text-center">
-                    <FiTrash2 className="text-2xl text-red-500 mx-auto mb-2" />
-                    <p className="text-2xl font-bold">{totalItems}</p>
-                    <p className="text-sm text-gray-600">Total Deleted</p>
-                </Card>
-                <Card className="text-center">
-                    <FiBriefcase className="text-2xl text-orange-500 mx-auto mb-2" />
-                    <p className="text-xl font-bold">{stats['employer'] || 0}</p>
-                    <p className="text-xs text-gray-500">Employers</p>
-                </Card>
-                <Card className="text-center">
-                    <FiFileText className="text-2xl text-red-500 mx-auto mb-2" />
-                    <p className="text-xl font-bold">{stats['job-demand'] || 0}</p>
-                    <p className="text-xs text-gray-500">Job Demands</p>
-                </Card>
-                <Card className="text-center">
-                    <FiUser className="text-2xl text-pink-500 mx-auto mb-2" />
-                    <p className="text-xl font-bold">{stats['worker'] || 0}</p>
-                    <p className="text-xs text-gray-500">Workers</p>
-                </Card>
-                <Card className="text-center">
-                    <FiUserCheck className="text-2xl text-indigo-500 mx-auto mb-2" />
-                    <p className="text-xl font-bold">{stats['sub-agent'] || 0}</p>
-                    <p className="text-xs text-gray-500">Sub Agents</p>
-                </Card>
-            </div>
-
-            {/* Filters */}
-            <Card>
-                <div className="space-y-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        {/* Search */}
-                        <form onSubmit={handleSearch} className="flex-1">
-                            <div className="relative">
-                                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <Input
-                                    type="text"
-                                    placeholder="Search by name..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-10 pr-10"
-                                />
-                                {search && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearch('')}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                    >
-                                        <FiX />
-                                    </button>
-                                )}
-                            </div>
-                        </form>
-
-                        {/* Entity Type Filter */}
-                        <div className="w-full md:w-48">
-                            <Select
-                                value={entityType}
-                                onChange={(e) => setEntityType(e.target.value as EntityType)}
-                                options={entityTypeOptions}
-                            />
-                        </div>
-
-                        {/* Clear Filters */}
-                        {(search || entityType !== 'all') && (
-                            <Button variant="outline" onClick={clearFilters}>
-                                <FiX className="mr-2" />
-                                Clear Filters
-                            </Button>
-                        )}
-                    </div>
-
-                    {/* Results count */}
-                    <div className="text-sm text-gray-500">
-                        Showing {items.length} of {totalItems} deleted items
-                    </div>
-                </div>
-            </Card>
-
-            {/* Loading State */}
-            {loading && (
-                <div className="flex justify-center py-12">
-                    <Spinner size="lg" />
-                </div>
-            )}
-
-            {/* Empty State */}
-            {!loading && items.length === 0 && (
-                <Card className="text-center py-12">
-                    <div className="flex flex-col items-center">
-                        <FiTrash2 className="text-4xl text-gray-400 mb-3" />
-                        <h3 className="text-lg font-medium text-gray-900">No deleted items found</h3>
-                        <p className="text-gray-500 mt-1">
-                            {search || entityType !== 'all'
-                                ? 'Try adjusting your filters'
-                                : 'No items have been deleted yet'}
-                        </p>
-                        {(search || entityType !== 'all') && (
-                            <Button variant="outline" onClick={clearFilters} className="mt-4">
-                                Clear Filters
-                            </Button>
-                        )}
-                    </div>
-                </Card>
-            )}
-
-            {/* Items List */}
-            {!loading && items.length > 0 && (
-                <div className="space-y-3">
-                    {items.map((item) => (
-                        <div
-                            key={`${item.entityType}-${item._id}`}
-                            className={`border-l-4 rounded-lg shadow-sm hover:shadow-md transition-all ${getEntityColor(item.entityType)}`}
-                        >
-                            <div className="bg-white rounded-r-lg p-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-1">
-                                            {getEntityIcon(item.entityType)}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <h3 className="text-lg font-semibold text-gray-900">
-                                                    {item.name}
-                                                </h3>
-                                                <Badge variant="danger">Deleted</Badge>
-                                                <Badge variant="default">
-                                                    {item.entityType === 'job-demand' ? 'Job Demand' :
-                                                        item.entityType === 'sub-agent' ? 'Sub Agent' :
-                                                            item.entityType.charAt(0).toUpperCase() + item.entityType.slice(1)}
-                                                </Badge>
-                                            </div>
-
-                                            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                                                {item.companyId && (
-                                                    <div className="text-gray-600">
-                                                        <span className="font-medium">Company:</span> {item.companyId.name}
-                                                    </div>
-                                                )}
-                                                {item.deletedBy && (
-                                                    <div className="text-gray-600">
-                                                        <span className="font-medium">Deleted by:</span> {item.deletedBy.fullName}
-                                                    </div>
-                                                )}
-                                                <div className="text-gray-600">
-                                                    <span className="font-medium">Deleted at:</span> {formatDate(item.deletedAt)}
-                                                </div>
-                                            </div>
-
-                                            {/* Additional info based on type */}
-                                            {item.entityType === 'employer' && item.originalData?.country && (
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    Country: {item.originalData.country} | Contact: {item.originalData.contact}
-                                                </div>
-                                            )}
-                                            {item.entityType === 'worker' && item.originalData?.status && (
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    Status: {item.originalData.status} | Contact: {item.originalData.contact}
-                                                </div>
-                                            )}
-                                            {item.entityType === 'job-demand' && item.originalData?.jobTitle && (
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    Title: {item.originalData.jobTitle} | Status: {item.originalData.status}
-                                                </div>
-                                            )}
-                                            {item.entityType === 'sub-agent' && item.originalData?.country && (
-                                                <div className="mt-1 text-sm text-gray-500">
-                                                    Country: {item.originalData.country} | Contact: {item.originalData.contact}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleViewOriginal(item)}
-                                        >
-                                            View
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => handleRestore(item)}
-                                            isLoading={actionLoading === item._id}
-                                            disabled={actionLoading !== null}
-                                        >
-                                            <FiRotateCcw className="mr-1" />
-                                            Restore
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="danger"
-                                            onClick={() => handlePermanentDelete(item)}
-                                            isLoading={actionLoading === item._id}
-                                            disabled={actionLoading !== null}
-                                        >
-                                            <FiTrash2 className="mr-1" />
-                                            Permanent
-                                        </Button>
-                                    </div>
+                {/* Header Section */}
+                <div className="mb-12">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-1 h-8 bg-gradient-to-b from-red-500 to-red-600 rounded-full"></div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono text-red-500 tracking-wider">RECYCLE BIN</span>
                                 </div>
                             </div>
+                            <h1 className="text-4xl font-light tracking-tight text-gray-900">
+                                Deleted Items
+                            </h1>
+                            <p className="text-gray-400 mt-2 text-sm font-light">
+                                Manage and restore soft-deleted items across the system
+                            </p>
                         </div>
-                    ))}
+                        <button
+                            onClick={fetchDeletedItems}
+                            disabled={loading}
+                            className="group flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:border-red-300 hover:text-red-600 hover:shadow-md transition-all duration-300"
+                        >
+                            <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
                 </div>
-            )}
 
-            {/* Pagination */}
-            {!loading && items.length > 0 && totalPages > 1 && (
-                <div className="flex justify-center gap-2">
-                    <Button
-                        variant="outline"
-                        disabled={page === 1}
-                        onClick={() => setPage(page - 1)}
-                    >
-                        Previous
-                    </Button>
-                    <span className="flex items-center px-4 text-sm text-gray-600">
-                        Page {page} of {totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        disabled={page === totalPages}
-                        onClick={() => setPage(page + 1)}
-                    >
-                        Next
-                    </Button>
+                {/* Warning Banner */}
+                <div className="bg-gradient-to-r from-red-50 to-red-100/50 rounded-2xl p-6 mb-10 border border-red-200">
+                    <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                            <FiAlertTriangle className="w-5 h-5 text-red-600" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-red-800">⚠️ Deleted Items Management</h3>
+                            <p className="text-sm text-red-700 mt-1">
+                                These items have been soft-deleted. You can restore them or permanently delete them.
+                                <strong className="font-semibold"> Permanent deletion cannot be undone.</strong>
+                            </p>
+                        </div>
+                    </div>
                 </div>
-            )}
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-5 gap-5 mb-10">
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <FiTrash2 className="w-5 h-5 text-red-500" />
+                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Total</span>
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{totalDeleted.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Deleted Items</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiBriefcase className="w-5 h-5 text-orange-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{stats['employer'] || 0}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Employers</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiFileText className="w-5 h-5 text-red-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{stats['job-demand'] || 0}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Job Demands</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiUser className="w-5 h-5 text-pink-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{stats['worker'] || 0}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Workers</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100">
+                        <div className="mb-4">
+                            <FiUserCheck className="w-5 h-5 text-indigo-500" />
+                        </div>
+                        <p className="text-3xl font-light text-gray-900">{stats['sub-agent'] || 0}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-light">Sub Agents</p>
+                    </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="mb-10">
+                    <div className="relative max-w-md">
+                        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                        <input
+                            type="text"
+                            placeholder="Search by name..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && fetchDeletedItems()}
+                            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-full text-sm focus:outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100 transition-all"
+                        />
+                    </div>
+                    <div className="flex items-center gap-4 mt-4">
+                        <select
+                            value={entityType}
+                            onChange={(e) => setEntityType(e.target.value as EntityType)}
+                            className="px-4 py-2 text-sm bg-white border border-gray-200 rounded-full focus:outline-none focus:border-red-300 focus:ring-2 focus:ring-red-100"
+                        >
+                            {entityTypeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                        {(search || entityType !== 'all') && (
+                            <button
+                                onClick={clearFilters}
+                                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+                        <div className="flex-1 text-right text-xs text-gray-300">
+                            {items.length} of {totalItems} results
+                        </div>
+                    </div>
+                </div>
+
+                {/* Security Cards */}
+                <div className="grid grid-cols-2 gap-4 mb-10">
+                    <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+                                <FiArchive className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-gray-700 uppercase tracking-wide">Soft Delete</p>
+                                <p className="text-xs text-gray-400 mt-1">Items are moved to recycle bin, not permanently removed.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100">
+                        <div className="flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center">
+                                <FiUserX className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-gray-700 uppercase tracking-wide">Audit Trail</p>
+                                <p className="text-xs text-gray-400 mt-1">All deletions and restores are logged with user details.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Deleted Items Grid */}
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <div className="w-8 h-8 border-2 border-gray-200 border-t-red-500 rounded-full animate-spin" />
+                    </div>
+                ) : items.length === 0 ? (
+                    <div className="text-center py-20">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                            <FiTrash2 className="w-6 h-6 text-gray-300" />
+                        </div>
+                        <p className="text-sm text-gray-400">No deleted items found</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-3 gap-6">
+                            {items.map((item) => (
+                                <div
+                                    key={`${item.entityType}-${item._id}`}
+                                    className={`group bg-white rounded-2xl border ${getEntityColor(item.entityType)} shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden`}
+                                >
+                                    <div className="p-5">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                                    {getEntityIcon(item.entityType)}
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-medium text-gray-900 text-sm group-hover:text-red-600 transition-colors">
+                                                        {item.name}
+                                                    </h3>
+                                                    <p className="text-xs text-gray-400 font-mono mt-0.5">#{item._id.slice(-6)}</p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="danger">Deleted</Badge>
+                                        </div>
+
+                                        {/* Type Badge */}
+                                        <div className="mb-3 pb-3 border-b border-gray-100">
+                                            <span className="text-xs text-gray-500">
+                                                {item.entityType === 'job-demand' ? 'Job Demand' :
+                                                    item.entityType === 'sub-agent' ? 'Sub Agent' :
+                                                        item.entityType.charAt(0).toUpperCase() + item.entityType.slice(1)}
+                                            </span>
+                                        </div>
+
+                                        {/* Deletion Details */}
+                                        <div className="space-y-2 mb-3">
+                                            {item.companyId && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs text-gray-400">Company</span>
+                                                    <span className="text-xs text-gray-600 truncate max-w-[180px]">{item.companyId.name}</span>
+                                                </div>
+                                            )}
+                                            {item.deletedBy && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs text-gray-400">Deleted by</span>
+                                                    <span className="text-xs text-gray-600 truncate max-w-[180px]">{item.deletedBy.fullName}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs text-gray-400">Deleted at</span>
+                                                <span className="text-xs text-gray-500">{formatDate(item.deletedAt)}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Additional Info */}
+                                        {item.entityType === 'employer' && item.originalData?.country && (
+                                            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                                                <p className="text-xs text-gray-500">
+                                                    <span className="font-medium">📍 Country:</span> {item.originalData.country}
+                                                    {item.originalData.contact && <span className="ml-2">📞 {item.originalData.contact}</span>}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {item.entityType === 'worker' && item.originalData?.status && (
+                                            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                                                <p className="text-xs text-gray-500">
+                                                    <span className="font-medium">Status:</span> {item.originalData.status}
+                                                    {item.originalData.contact && <span className="ml-2">📞 {item.originalData.contact}</span>}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {item.entityType === 'job-demand' && item.originalData?.jobTitle && (
+                                            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                                                <p className="text-xs text-gray-500">
+                                                    <span className="font-medium">Title:</span> {item.originalData.jobTitle}
+                                                    {item.originalData.status && <span className="ml-2">📊 {item.originalData.status}</span>}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {item.entityType === 'sub-agent' && item.originalData?.country && (
+                                            <div className="mb-3 p-2 bg-gray-50 rounded-lg">
+                                                <p className="text-xs text-gray-500">
+                                                    <span className="font-medium">📍 Country:</span> {item.originalData.country}
+                                                    {item.originalData.contact && <span className="ml-2">📞 {item.originalData.contact}</span>}
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2 pt-3 border-t border-gray-100">
+                                            <button
+                                                onClick={() => handleViewOriginal(item)}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                                            >
+                                                View
+                                            </button>
+                                            <button
+                                                onClick={() => handleRestore(item)}
+                                                disabled={actionLoading === item._id}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                            >
+                                                <FiRotateCcw className="inline mr-1 w-3 h-3" />
+                                                Restore
+                                            </button>
+                                            <button
+                                                onClick={() => handlePermanentDelete(item)}
+                                                disabled={actionLoading === item._id}
+                                                className="flex-1 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                                            >
+                                                <FiTrash2 className="inline mr-1 w-3 h-3" />
+                                                Permanent
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="flex justify-center items-center gap-1 mt-12">
+                                <button
+                                    onClick={() => setPage(page - 1)}
+                                    disabled={page === 1}
+                                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-30 transition-all"
+                                >
+                                    <FiChevronLeft className="w-4 h-4" />
+                                </button>
+                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                    let pageNum: number;
+                                    if (totalPages <= 5) {
+                                        pageNum = i + 1;
+                                    } else if (page <= 3) {
+                                        pageNum = i + 1;
+                                    } else if (page >= totalPages - 2) {
+                                        pageNum = totalPages - 4 + i;
+                                    } else {
+                                        pageNum = page - 2 + i;
+                                    }
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`w-8 h-8 text-sm rounded-full transition-all ${page === pageNum
+                                                ? 'bg-red-500 text-white shadow-md'
+                                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => setPage(page + 1)}
+                                    disabled={page === totalPages}
+                                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-30 transition-all"
+                                >
+                                    <FiChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 }

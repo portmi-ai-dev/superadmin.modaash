@@ -11,6 +11,7 @@ const USER_KEY = 'super_admin_user';
 export const setToken = (token: string): void => {
     if (typeof window !== 'undefined') {
         localStorage.setItem(TOKEN_KEY, token);
+        console.log('💾 Token saved to localStorage');
     }
 };
 
@@ -19,7 +20,9 @@ export const setToken = (token: string): void => {
  */
 export const getToken = (): string | null => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(TOKEN_KEY);
+    console.log('🔑 Token retrieved:', token ? `${token.substring(0, 20)}...` : 'null');
+    return token;
 };
 
 /**
@@ -28,6 +31,7 @@ export const getToken = (): string | null => {
 export const removeToken = (): void => {
     if (typeof window !== 'undefined') {
         localStorage.removeItem(TOKEN_KEY);
+        console.log('🗑️ Token removed from localStorage');
     }
 };
 
@@ -37,6 +41,7 @@ export const removeToken = (): void => {
 export const setUser = (user: SuperAdmin): void => {
     if (typeof window !== 'undefined') {
         localStorage.setItem(USER_KEY, JSON.stringify(user));
+        console.log('💾 User saved to localStorage:', user.email);
     }
 };
 
@@ -46,7 +51,9 @@ export const setUser = (user: SuperAdmin): void => {
 export const getUser = (): SuperAdmin | null => {
     if (typeof window === 'undefined') return null;
     const userStr = localStorage.getItem(USER_KEY);
-    return userStr ? JSON.parse(userStr) : null;
+    const user = userStr ? JSON.parse(userStr) : null;
+    console.log('👤 User retrieved:', user ? user.email : 'null');
+    return user;
 };
 
 /**
@@ -55,6 +62,7 @@ export const getUser = (): SuperAdmin | null => {
 export const removeUser = (): void => {
     if (typeof window !== 'undefined') {
         localStorage.removeItem(USER_KEY);
+        console.log('🗑️ User removed from localStorage');
     }
 };
 

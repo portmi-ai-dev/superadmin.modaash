@@ -1,11 +1,11 @@
 // app/store/authStore.ts
 
+import toast from 'react-hot-toast';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { superAdminAuthClient } from '../lib/api';
-import { setToken, setUser, clearAuth, getUser, getToken } from '../lib/auth';
-import { SuperAdmin, LoginCredentials, ApiResponse } from '../types';
-import toast from 'react-hot-toast';
+import { clearAuth, getToken, getUser, setToken, setUser } from '../lib/auth';
+import { LoginCredentials, SuperAdmin } from '../types';
 
 interface AuthStore {
   // State
@@ -13,7 +13,7 @@ interface AuthStore {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<boolean>;
   logout: () => void;
@@ -32,17 +32,21 @@ export const useAuthStore = create<AuthStore>()(
 
       // Login action
       login: async (credentials) => {
+        console.log('🔐 Login attempt with:', credentials.username);
         set({ isLoading: true });
-        
+
         try {
           const response = await superAdminAuthClient.post('/login', credentials);
           const data = response.data;
-          
+
+          console.log('📦 Login response:', data);
+
           if (data.success && data.token && data.data) {
+            console.log('✅ Login successful, saving token and user');
             // Save to localStorage
             setToken(data.token);
             setUser(data.data);
-            
+
             // Update state
             set({
               user: data.data,
@@ -50,15 +54,17 @@ export const useAuthStore = create<AuthStore>()(
               isAuthenticated: true,
               isLoading: false,
             });
-            
+
             toast.success('Login successful');
             return true;
           } else {
+            console.log('❌ Login failed:', data.message);
             toast.error(data.message || 'Login failed');
             set({ isLoading: false });
             return false;
           }
         } catch (error: any) {
+          console.error('❌ Login error:', error);
           const message = error.response?.data?.message || 'Login failed. Please check your credentials.';
           toast.error(message);
           set({ isLoading: false });
@@ -68,6 +74,7 @@ export const useAuthStore = create<AuthStore>()(
 
       // Logout action
       logout: () => {
+        console.log('🚪 Logging out');
         clearAuth();
         set({
           user: null,
@@ -75,7 +82,7 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: false,
         });
         toast.success('Logged out successfully');
-        
+
         // Redirect to login
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
@@ -84,10 +91,18 @@ export const useAuthStore = create<AuthStore>()(
 
       // Check authentication on app load
       checkAuth: () => {
+        console.log('🔍 Checking authentication...');
         const token = getToken();
         const user = getUser();
-        
+
+        console.log('Token found:', token ? 'Yes' : 'No');
+        console.log('User found:', user ? 'Yes' : 'No');
+        if (user) {
+          console.log('User email:', user.email);
+        }
+
         if (token && user) {
+          console.log('✅ User is authenticated');
           set({
             user,
             token,
@@ -95,7 +110,8 @@ export const useAuthStore = create<AuthStore>()(
           });
           return true;
         }
-        
+
+        console.log('❌ User is NOT authenticated');
         set({ isAuthenticated: false });
         return false;
       },
@@ -104,12 +120,12 @@ export const useAuthStore = create<AuthStore>()(
       setLoading: (loading) => set({ isLoading: loading }),
     }),
     {
-      name: 'super-admin-storage', // name for localStorage
-      partialize: (state) => ({ 
-        user: state.user, 
+      name: 'super-admin-storage',
+      partialize: (state) => ({
+        user: state.user,
         token: state.token,
-        isAuthenticated: state.isAuthenticated 
-      }), // only persist these
+        isAuthenticated: state.isAuthenticated
+      }),
     }
   )
 );
