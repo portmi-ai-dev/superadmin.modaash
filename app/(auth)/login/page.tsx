@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '../../store/authStore';
 import Button from '../../components/ui/Button';
@@ -10,10 +10,26 @@ import { FiLock, FiUser, FiEye, FiEyeOff } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+            <div className="text-center text-gray-500">Loading login…</div>
+          </div>
+        </div>
+      )}
+    >
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isLoading, isAuthenticated, checkAuth } = useAuthStore();
-  
+
   const [credentials, setCredentials] = useState({
     username: '',
     password: '',
@@ -38,7 +54,7 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!credentials.username || !credentials.password) {
       toast.error('Please enter both username/email and password');
       return;
